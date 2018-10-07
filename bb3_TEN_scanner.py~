@@ -11,13 +11,10 @@ FILEPATH = '/var/opt/lufgroup/apps/nova_lufcomp/novaStats_ma/data'
 def list_files():
 	files = [f for f in listdir(FILEPATH) if isfile(join(FILEPATH, f))]
 	return files
-	
-def list_files_sub():
-	BB3_files = [f for f in listdir(FILEPATH) if 'BB3:' in f]
-	BB3_TEN_files = [f for f in listdir(FILEPATH) if 'BB3_TEN' in f]
-	BB3_FIX_files = [f for f in listdir(FILEPATH) if 'BB3_FIX' in f]
-	BB3_FLY_files = [f for f in listdir(FILEPATH) if 'BB3_FLY' in f]	
-	return [BB3_files, BB3_TEN_files, BB3_FIX_files, BB3_FLY_files]
+def list_TEN_files():
+	files = list_files()
+	Ten_files = [f for f in files if 'BB3_TEN' in f]
+	return Ten_files
 	
 def read_data(filename, start_dt, end_dt):
 	start = pd.to_datetime(start_dt)
@@ -26,7 +23,7 @@ def read_data(filename, start_dt, end_dt):
 	df.columns = ['price', '2D_MA', '2D_STD']
 	df.index.names = ['Date']
 	return df[start_dt:end_dt]
-	
+
 def calc_sr(filename, start_dt, end_dt, entry, exit, threshold=10):
 	# read data from file
 	data = read_data(filename, start_dt, end_dt)
@@ -62,71 +59,50 @@ def calc_sr(filename, start_dt, end_dt, entry, exit, threshold=10):
 	# sharpeRatio = temp.mean() / temp.std() * np.sqrt(len(temp))
 	return [sharpeRatio, total_profit]
 
-def optimize_sr(filename, start_dt, end_dt, entry_list=[1.5, 2], exit_list=[0.5, 1], threshold=10):
-	max_sr = -100
+def optimize_sr(filename, start_dt, end_dt, entry_list=[2], exit_list=[0.5], threshold=10):
+	max_pnl = 0
 	opt_entry = 0
 	opt_exit = 0
 	for entry in entry_list:
 		for exit in exit_list:
 			[sr,pnl] = calc_sr(filename, start_dt, end_dt, entry, exit, threshold)
-			if sr > max_sr:
-				max_sr = sr
+			if pnl > max_pnl:
 				max_pnl = pnl
 				opt_entry = entry
 				opt_exit = exit
-	return [filename[:-5], max_pnl, max_sr,  opt_entry, opt_entry * opt_exit]
-	
-def generate_bb3_list(entry=2, exit=0.5, threshold=10):
+	return [filename[:-5], max_pnl, sr,  opt_entry, opt_entry * opt_exit]
+
+def main():
 	end_dt = datetime.now()
 	start_dt = end_dt - BDay(20)
-	start_dt_2 = end_dt - BDay(10)
 	time = datetime.now()
-	BB3_files = [f for f in listdir(FILEPATH) if 'BB3:' in f]
-	total_files = float(len(BB3_files))
+	files = list_TEN_files()
+	total_files = float(len(files))
 	counter = 0
-	with open('data/bb3_list.csv','wb') as fout:
+	with open('data/bb3_TEN_list.csv','wb') as fout:
 		writer = csv.writer(fout)
-		for filename in BB3_files:
+		for file in files:
 			counter = counter + 1
 			try:
-				[sharpeRatio, total_profit] = calc_sr(filename, start_dt, end_dt, entry, exit, threshold)
-				if sharpeRatio > 2.0:
-					[sharpeRatio_2, total_profit_2] = calc_sr(filename, start_dt_2, end_dt, entry, exit, threshold)
-					if sharpeRatio_2 > 2.0:
-						print filename[:-5] + ' , ' + str(sharpeRatio) + ' , ' + str(total_profit) + ' , ' + 'finished:' + str(counter/total_files*100) + '%'
-						print filename[:-5] + ' , ' + str(sharpeRatio_2) + ' , ' + str(total_profit_2) + ' , ' + 'finished:' + str(counter/total_files*100) + '%'
-						writer.writerow([filename[:-5], sharpeRatio, sharpeRatio_2, total_profit, total_profit_2])
-			except:
-				pass
-		fout.close()
-		print datetime.now()-time
-
-def generate_bb3_ten_list(threshold=10):
-	end_dt = datetime.now()
-	start_dt = end_dt - BDay(10)
-	time = datetime.now()
-	BB3_TEN_files = [f for f in listdir(FILEPATH) if 'BB3_TEN:' in f]
-	total_files = float(len(BB3_TEN_files))
-	counter = 0
-	with open('data/bb3_ten_list.csv','wb') as fout:
-		writer = csv.writer(fout)
-		for filename in BB3_TEN_files:
-			counter = counter + 1
-			try:
-				srlist = optimize_sr(filename, start_dt, end_dt, threshold=threshold)
+				if 'BB3:' in file:
+					threshold = 10
+				elif 'BB3_FIX' in file:
+					threshold = 25
+				elif 'BB3_FLY' in file:
+					threshold = 25
+				elif 'BB3_TEN' in file:
+					threshold = 10
+				else:
+					continue
+			
+				srlist = optimize_sr(file, start_dt, end_dt, threshold=threshold)
 				if srlist[2] > 0:
 					print srlist[0]  + ' , ' + str(srlist[1]) + ' , ' + str(srlist[2]) + ' , ' + str(srlist[3]) + ' , ' + str(srlist[4]) + ' , finished: ' + str(counter/total_files*100) + '%' 
 					writer.writerow(srlist)
 			except:
 				pass
-		fout.close()
-		print datetime.now()-time
-	
-	
-
-def main():
-	generate_bb3_list()
-	generate_bb3_ten_list()
+	fout.close()
+	print datetime.now()-time
 	
 if __name__ == "__main__":
 	main()
